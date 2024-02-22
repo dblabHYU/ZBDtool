@@ -65,7 +65,7 @@ void print_cmd(char* cmd_list, int idx, struct zbd_opts *opts, unsigned int nr_z
 }
 
 
-int print_zone_info_cmd(int cmd, int zone_num, struct zbd_zone *zones, char *size_len)
+int print_zone_info_cmd(int cmd, int zone_num, struct zbd_zone *zones, char *size_len, int *tt_use)
 {
     switch (cmd) {
         case 0:
@@ -81,45 +81,67 @@ int print_zone_info_cmd(int cmd, int zone_num, struct zbd_zone *zones, char *siz
             return sprintf(size_len, "%s", zbd_zone_cond_str(&zones[zone_num], true));
         case 4:
             if (!strcmp(zbd_zone_cond_str(&zones[zone_num], true),"fu"))
+            {
+                *tt_use += 128;
                 return sprintf(size_len, "util 100%%");
+            }
             else
-                return sprintf(size_len, "util %0.02f%%", ((float)zbd_zone_wp(&zones[zone_num]) - (float)zbd_zone_start(&zones[zone_num])) / (float)zbd_zone_capacity(&zones[zone_num])*100);
+            {
+                float usage = (((float)zbd_zone_wp(&zones[zone_num]) - (float)zbd_zone_start(&zones[zone_num])) / (float)zbd_zone_capacity(&zones[zone_num]));
+                *tt_use += 128 * usage;
+                return sprintf(size_len, "util %0.02f%%", usage*100);
+            }
+        case 5:
+            return sprintf(size_len, "tt_use %d MB", *tt_use);
         default:
             return -1;
     }
 }
 
-void print_zone(unsigned int nr_zones, int cmd, int zone_num, struct zbd_zone *zones, int length)
+void print_zone(unsigned int nr_zones, int cmd, int zone_num, struct zbd_zone *zones, int length, int *tt_use)
 {
     printf("|");
-    for (int j = 0; j < 4 && zone_num+j < nr_zones; ++j)
+    if (cmd < nr_zones)
     {
-        if (zbd_zone_seq(&zones[zone_num+j])) {
-            if (!strcmp(zbd_zone_cond_str(&zones[zone_num+j], true),"fu"))
-            {
-                char size_len[64];
-                int length3;
-                length3 = print_zone_info_cmd(cmd, zone_num+j, zones, size_len);
-                print_padded(size_len, length/2+length3/2, 1);
-                print_padded("", length - length/2-length3/2 - 1, 1);
-            }
-            else if (!strcmp(zbd_zone_cond_str(&zones[zone_num+j], true),"oi") || !strcmp(zbd_zone_cond_str(&zones[zone_num+j], true),"oe"))
-            {
-                char size_len[64];
-                int length3;
-                length3 = print_zone_info_cmd(cmd, zone_num+j, zones, size_len);
-                print_padded(size_len, length/2+length3/2, 2);
-                print_padded("", length - length/2-length3/2 - 1, 2);
-            }
-            else
-            {
-                char size_len[64];
-                int length3;
-                length3 = print_zone_info_cmd(cmd, zone_num+j, zones, size_len);
-                print_padded(size_len, length/2+length3/2, 0);
-                print_padded("", length - length/2-length3/2 - 1, 0);
+        for (int j = 0; j < 4 && zone_num+j < nr_zones; ++j)
+        {
+
+                if (zbd_zone_seq(&zones[zone_num+j])) {
+                    if (!strcmp(zbd_zone_cond_str(&zones[zone_num+j], true),"fu"))
+                    {
+                        char size_len[64];
+                        int length3;
+                        length3 = print_zone_info_cmd(cmd, zone_num+j, zones, size_len, tt_use);
+                        print_padded(size_len, length/2+length3/2, 1);
+                        print_padded("", length - length/2-length3/2 - 1, 1);
+                    }
+                    else if (!strcmp(zbd_zone_cond_str(&zones[zone_num+j], true),"oi") || !strcmp(zbd_zone_cond_str(&zones[zone_num+j], true),"oe"))
+                    {
+                        char size_len[64];
+                        int length3;
+                        length3 = print_zone_info_cmd(cmd, zone_num+j, zones, size_len, tt_use);
+                        print_padded(size_len, length/2+length3/2, 2);
+                        print_padded("", length - length/2-length3/2 - 1, 2);
+                    }
+                    else
+                    {
+                        char size_len[64];
+                        int length3;
+                        length3 = print_zone_info_cmd(cmd, zone_num+j, zones, size_len, tt_use);
+                        print_padded(size_len, length/2+length3/2, 0);
+                        print_padded("", length - length/2-length3/2 - 1, 0);
+                    }
+                }
+                printf("|");
             }
         }
+    else
+    {
+        char size_len[64];
+        int length3;
+        length3 = print_zone_info_cmd(5, zone_num, zones, size_len, tt_use);
+        print_padded(size_len, length*2+length3/2, 1);
+        print_padded("", length*4 - length*2-length3/2 - 1, 1);
         printf("|");
     }
     printf("\n");
@@ -128,12 +150,15 @@ void print_zone(unsigned int nr_zones, int cmd, int zone_num, struct zbd_zone *z
 
 void print_zone_info(unsigned int nr_zones, struct zbd_zone *zones, int length)
 {
+    int tt_use = 0;
     for (int i = 0; i < nr_zones; i += 4)
     {
         for (int j = 0; j < 5; j++)
-            print_zone(nr_zones, j, i, zones, length);
+            print_zone(nr_zones, j, i, zones, length, &tt_use);
         printf("+---------------------------------------------------------------------------------------------------------------+\n");
     }
+    print_zone(nr_zones, nr_zones+1, nr_zones+1, zones, length, &tt_use);
+    printf("+---------------------------------------------------------------------------------------------------------------+\n");
 
 }
 
