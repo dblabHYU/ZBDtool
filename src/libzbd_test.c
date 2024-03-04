@@ -3,6 +3,8 @@
 #include <libzbd/zbd.h>
 #include "/home/libzbd/tools/cli/zbd.h"
 
+
+
 void print_padded(const char *str, int width, int cmd) {
     int len = strlen(str);
     int padding = width - len;
@@ -22,6 +24,16 @@ void print_padded(const char *str, int width, int cmd) {
         default:
             printf("%s", str);
     }
+}
+
+int count_active_zones(struct zbd_zone *zones, unsigned int nr_zones) {
+    int active_zone_count = 0;
+    for (unsigned int i = 0; i < nr_zones; i++) {
+        if (zbd_zone_is_active(&zones[i])) {
+            active_zone_count++;
+        }
+    }
+    return active_zone_count;
 }
 
 
@@ -49,13 +61,13 @@ void print_cmd(char* cmd_list, int idx, struct zbd_opts *opts, unsigned int nr_z
             if (opts->dev_info.max_nr_open_zones == 0)
                 length3 = sprintf(size_len, "%s", "no limit");
             else
-                length3 = sprintf(size_len, "%ls", &opts->dev_info.max_nr_open_zones);
+                length3 = sprintf(size_len, "%d", opts->dev_info.max_nr_open_zones);
             break;
         case 6:
             if (opts->dev_info.max_nr_active_zones == 0)
                 length3 = sprintf(size_len, "%s", "no limit");
             else
-                length3 = sprintf(size_len, "%ls", &opts->dev_info.max_nr_active_zones);
+                length3 = sprintf(size_len, "%d", opts->dev_info.max_nr_active_zones);
             break;
     }
     print_padded(cmd_list, length/2, 0);
@@ -189,6 +201,8 @@ int main() {
         return -1;
     }
     ret = zbd_report_zones(ret, 0, 0, ZBD_RO_ALL, zones, &nr_zones);
+    int active_zone_count = count_active_zones(zones, nr_zones);
+    printf("Number of active zones: %d\n", active_zone_count);
     size_t length = snprintf(NULL, 0, "*-------------------------------------------------- %u Zones ---------------------------------------------------*", nr_zones);
     printf("+-------------------------------------------------- %u Zones ---------------------------------------------------+\n", nr_zones);
     for (int i = 0; i < 7; i++)
@@ -197,7 +211,6 @@ int main() {
     }
     printf("+---------------------------------------------------------------------------------------------------------------+\n");
     print_zone_info(nr_zones, zones, (length)/4);
-
 
     free(zones);
     zbd_close(ret);
